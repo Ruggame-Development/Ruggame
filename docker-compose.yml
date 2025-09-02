@@ -1,0 +1,83 @@
+services:
+  app:
+    build:
+      context: .
+      target: production-main
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    env_file:
+      - website/.env
+    depends_on:
+      - websocket
+      - timescaledb
+      - redis
+    restart: unless-stopped
+    networks:
+      - dev
+    deploy:
+      replicas: 1
+
+  websocket:
+    build:
+      context: .
+      target: production-websocket
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    env_file:
+      - website/.env
+    depends_on:
+      - timescaledb
+      - redis  
+    restart: unless-stopped
+    networks:
+      - dev
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg14
+    container_name: postgres
+    restart: always
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - ./.docker-compose/data/timescaledb:/var/lib/postgresql/data
+    networks:
+      - dev
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:alpine
+    container_name: redis
+    restart: always
+    ports:
+      - 6379:6379
+    volumes:
+      - ./.docker-compose/data/redis:/data
+    networks:
+      - dev
+
+  minio:
+    image: docker.io/bitnami/minio:2022
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    networks:
+      - dev
+    volumes:
+      - './.docker-compose/data/minio:/data'
+    environment:
+      - MINIO_ROOT_USER=minio
+      - MINIO_ROOT_PASSWORD=password
+      - MINIO_DEFAULT_BUCKETS=rugplay
+
+networks:
+  dev:
+    driver: bridge
